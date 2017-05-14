@@ -90,5 +90,6 @@
         if (!window.Twilio.TwilioVoiceClient) window.Twilio.TwilioVoiceClient = new TwilioPlugin.TwilioVoiceClient();
     }
  TwilioPlugin.install();
+ module.export=TwilioPlugin;
 
 })()
