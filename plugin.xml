@@ -101,6 +101,10 @@
                 target-dir="src/com/phonegap/plugins/twiliovoice/gcm" />
 
         <source-file src="sounds/ringing.wav" target-dir="res/raw"/>
+        
+        <js-module src="www/TwilioVoicePlugin.js" name="TwilioPlugin">
+            <clobbers target="navigator.TwilioPlugin" />
+        </js-module>
 
     </platform>
 
