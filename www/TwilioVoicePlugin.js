@@ -91,5 +91,4 @@
     }
 	 TwilioPlugin.install();
 	 module.export=TwilioPlugin;
-
 })()
