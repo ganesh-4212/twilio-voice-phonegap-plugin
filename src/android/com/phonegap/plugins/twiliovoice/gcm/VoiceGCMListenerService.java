@@ -17,12 +17,17 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import com.twilio.voice.CallInvite;
+import com.twilio.voice.MessageException;
+import com.twilio.voice.MessageListener;
+import com.twilio.voice.Voice;
 
 import com.google.android.gms.gcm.GcmListenerService;
 
 import com.phonegap.plugins.twiliovoice.TwilioVoicePlugin;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static android.R.attr.data;
 
@@ -50,21 +55,69 @@ public class VoiceGCMListenerService extends GcmListenerService {
     }
 
     @Override
-    public void onMessageReceived(String from, Bundle bundle) {
+    public void onMessageReceived(final String from,final Bundle bundle) {
         Log.d(TAG, "onMessageReceived " + from);
 
         Log.d(TAG, "Received onMessageReceived()");
         Log.d(TAG, "From: " + from);
         Log.d(TAG, "Bundle data: " + bundle.toString());
-
-        if (CallInvite.isValidMessage(bundle)) {
-            /*
-             * Generate a unique notification id using the system time
-             */
-            int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+        Map<String,String> data=new HashMap();
+        for(String key: bundle.keySet()){
+            data.put(key,(String)bundle.get(key));
+        }
+        Voice.handleMessage(getApplicationContext(), data, new MessageListener() {
+            @Override
+            public void onCallInvite(CallInvite callInvite) {
+                int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
             /*
              * Create an CallInvite from the bundle
              */
+                if (callInvite != null) {
+                    sendCallInviteToPlugin(callInvite, notificationId);
+                    showNotification(callInvite, notificationId);
+                } else {
+                    Log.e(TAG, "Error: CallInvite was not able to be created from Bundle");
+                }
+            }
+
+            @Override
+            public void onError(MessageException e) {
+                Log.d(TAG, "Invalid CallInvite Message");
+
+                // from http://stackoverflow.com/a/32066691
+                Intent passThroughIntent = new Intent();
+                bundle.putString("from", from);
+                passThroughIntent.putExtras(bundle);
+                passThroughIntent.setAction("com.google.android.c2dm.intent.RECEIVE");
+                passThroughIntent.setComponent(null);
+
+                // from https://github.com/intercom/intercom-cordova/pull/166/files
+                List<ResolveInfo> services = getPackageManager().queryIntentServices(passThroughIntent, 0);
+                for(ResolveInfo info : services) {
+                    try {
+                        Class serviceClass = Class.forName(info.serviceInfo.name);
+                        if (serviceClass == this.getClass()) {
+                            continue;
+                        }
+
+                        Context applicationContext = getApplicationContext();
+                        passThroughIntent.setClass(applicationContext, serviceClass);
+                        applicationContext.startService(passThroughIntent);
+                        return;
+                    } catch (ClassNotFoundException ex) {
+                        // Class not found. Try the next service
+                    }
+                }
+            }
+        });
+        /*if (CallInvite.isValidMessage(bundle)) {
+            *//*
+             * Generate a unique notification id using the system time
+             *//*
+            int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+            *//*
+             * Create an CallInvite from the bundle
+             *//*
             CallInvite callInvite = CallInvite.create(bundle);
             if (callInvite != null) {
                 sendCallInviteToPlugin(callInvite, notificationId);
@@ -99,7 +152,7 @@ public class VoiceGCMListenerService extends GcmListenerService {
                     // Class not found. Try the next service
                 }
             }
-        }
+        }*/
     }
 
     /*
@@ -111,7 +164,7 @@ public class VoiceGCMListenerService extends GcmListenerService {
 
         Log.d(TAG, "showNotification()");
 
-        if (!callInvite.isCancelled()) {
+        if (callInvite.getState()!=CallInvite.State.CANCELED) {
             /*
              * Create a PendingIntent to specify the action when the notification is
              * selected in the notification drawer

@@ -24,7 +24,7 @@ import com.twilio.voice.CallInvite;
 import com.twilio.voice.CallState;
 import com.twilio.voice.RegistrationException;
 import com.twilio.voice.RegistrationListener;
-import com.twilio.voice.VoiceClient;
+import com.twilio.voice.Voice;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -289,6 +289,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 
 
 	private void call(final JSONArray arguments, final CallbackContext callbackContext) {
+
 		cordova.getThreadPool().execute(new Runnable(){
 			public void run() {
 				String accessToken = arguments.optString(0,mAccessToken);
@@ -297,7 +298,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 				if (mCall != null && mCall.getState().equals(CallState.CONNECTED)) {
 					mCall.disconnect();
 				}
-				mCall = VoiceClient.call(cordova.getActivity(),accessToken, map, mCallListener);
+				mCall = Voice.call(cordova.getActivity(),accessToken, map, mCallListener);
 				Log.d(TAG, "Placing call with params: " + map.toString());
 			}
 		});
@@ -481,11 +482,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 		context.success();
 	}
 	
-	/**
-	 * 	Changes sound from earpiece to speaker and back
-	 * 
-	 * 	@param mode	Speaker Mode
-	 * */
+
 	public void setSpeaker(final JSONArray arguments, final CallbackContext callbackContext) {
 		cordova.getThreadPool().execute(new Runnable(){
 			public void run() {
@@ -588,7 +585,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
      * Register your GCM token with Twilio to enable receiving incoming calls via GCM
      */
     private void register() {
-        VoiceClient.register(cordova.getActivity().getApplicationContext(), mAccessToken, mGCMToken, mRegistrationListener);
+        Voice.register(cordova.getActivity().getApplicationContext(), mAccessToken, mGCMToken, mRegistrationListener);
     }
 
     // Process incoming call invites
@@ -597,7 +594,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
         if (intent != null && intent.getAction() != null && intent.getAction().equals(ACTION_INCOMING_CALL)) {
             mCallInvite = intent.getParcelableExtra(INCOMING_CALL_INVITE);
             Log.d(TAG, "Call Invite: " + mCallInvite.toString());
-            if (!mCallInvite.isCancelled()) {
+			if (mCallInvite != null && (mCallInvite.getState() == CallInvite.State.PENDING)) {
                 SoundPoolManager.getInstance(cordova.getActivity()).playRinging();
                 NotificationManager mNotifyMgr = 
 		        (NotificationManager) cordova.getActivity().getSystemService(Activity.NOTIFICATION_SERVICE);
@@ -646,7 +643,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 			try {
 				callProperties.putOpt("from", call.getFrom());
 				callProperties.putOpt("to", call.getTo());
-				callProperties.putOpt("callSid", call.getCallSid());
+				callProperties.putOpt("callSid", call.getSid());
 				callProperties.putOpt("isMuted", call.isMuted());
 				String callState = getCallState(call.getState());
 				callProperties.putOpt("state",callState);
@@ -654,12 +651,6 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 				Log.e(TAG,e.getMessage(),e);
 			}
 			javascriptCallback("oncalldidconnect",callProperties,mInitCallbackContext);
-		}
-
-		@Override
-		public void onDisconnected(Call call) {
-			mCall = null;
-			javascriptCallback("oncalldiddisconnect",mInitCallbackContext);
 		}
 
 		@Override
@@ -687,7 +678,7 @@ public class TwilioVoicePlugin extends CordovaPlugin {
 			return "accepted";
 		} else if (state == CallInvite.State.REJECTED) {
 			return "rejected";
-		} else if (state == CallInvite.State.CANCELLED) {
+		} else if (state == CallInvite.State.CANCELED) {
 			return "cancelled";
 		}
 
